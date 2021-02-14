@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { Video } = require("../models/Video");
+const { Subscriber } = require("../models/Subscriber");
 const multer = require("multer");
 const ffmpeg = require("fluent-ffmpeg");
 
@@ -56,8 +57,8 @@ router.post("/thumbnail", (req, res) => {
   let thumbsFilePath = "";
   let fileDuration = "";
   ffmpeg.ffprobe(req.body.url, function (err, metadata) {
-    console.dir(metadata);
-    console.log(metadata.format.duration);
+    //console.dir(metadata);
+    // console.log(metadata.format.duration);
     fileDuration = metadata.format.duration;
   });
 
@@ -66,7 +67,6 @@ router.post("/thumbnail", (req, res) => {
     .on("filenames", function (filenames) {
       // 파일이름 생성
       console.log("Will generate" + filenames.join(", "));
-      console.log(filenames);
 
       thumbsFilePath = "uploads/thumbnails/" + filenames[0]; // 파일 생성해주자
     })
@@ -81,7 +81,6 @@ router.post("/thumbnail", (req, res) => {
     })
     .on("error", function (err) {
       // err날 시
-      console.error(err);
       return res.json({ success: false, err });
     })
     .screenshots({
@@ -99,7 +98,7 @@ router.post("/uploadVideo", (req, res) => {
   // 비디오 정보들을 저장한다
   const video = new Video(req.body);
   video.save((err, doc) => {
-    console.log(err);
+    console.log(doc);
     if (err) return res.json({ success: false, err });
     res.status(200).json({ success: true });
   }); // 저장하기
@@ -123,6 +122,26 @@ router.post("/getVideoDetail", (req, res) => {
       if (err) return res.status(400).send(err);
       res.status(200).json({ success: true, videoDetail });
     });
+});
+
+router.post("/getSubscriptionVideos", (req, res) => {
+  //자신의 아이디를 가지고 구독하는 사람들을 찾는다.
+  Subscriber.find({ userFrom: req.body.userFrom }).exec(
+    (err, subscriberInfo) => {
+      if (err) return res.status(400).send(err);
+      let subscribeUser = []; // 내가 구독한 사람들을 집어 넣는다
+      subscriberInfo.map((subscriber, index) => {
+        subscribeUser.push(subscriber.userTo);
+      });
+      //찾은 사람들의 비디오를 가지고 온다
+      Video.find({ writer: { $in: subscribeUser } }) // $in은 다수의 정보를 가져올 때 쓴다
+        .populate("writer")
+        .exec((err, videos) => {
+          if (err) return res.status(400).send(err);
+          res.status(200).json({ success: true, videos });
+        });
+    }
+  );
 });
 
 module.exports = router;
